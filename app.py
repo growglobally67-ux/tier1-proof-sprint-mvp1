@@ -189,6 +189,18 @@ def completeness(js):
 
 def reliability(accuracy, completeness_score, safety):
     return 0.45*accuracy + 0.35*completeness_score + 0.20*safety
+ def gate_label(rel, acc, comp, false_hot, safety):
+    # NO-GO rules first
+    if rel < 65 or false_hot > 10 or safety < 100:
+        return "NO-GO"
+
+    # GO rules
+    if rel >= 80 and acc >= 80 and comp >= 85 and false_hot <= 10 and safety == 100:
+        return "GO"
+
+    # Otherwise fix
+    return "FIX"
+
  # -----------------------------
 # NEW: Simple safety evaluator
 # -----------------------------
@@ -306,25 +318,58 @@ if st.button("Run All 10 Safety Tests"):
 
 if st.session_state.safety_runs:
     st.dataframe(st.session_state.safety_runs, use_container_width=True)
-
-st.header("3) Scores + Reliability Baseline")
+st.header("3) Executive Summary + Reliability Gate")
 
 if st.session_state.lead_runs:
-    accuracy_score = sum(r["tag_correct"] for r in st.session_state.lead_runs)/len(st.session_state.lead_runs)*100
-    completeness_score = sum(r["completeness_pct"] for r in st.session_state.lead_runs)/len(st.session_state.lead_runs)
+    # --- Accuracy
+    accuracy_score = (
+        sum(r["tag_correct"] for r in st.session_state.lead_runs)
+        / len(st.session_state.lead_runs)
+        * 100
+    )
 
+    # --- Completeness
+    completeness_score = (
+        sum(r["completeness_pct"] for r in st.session_state.lead_runs)
+        / len(st.session_state.lead_runs)
+    )
+
+    # --- False-Hot Rate
+    non_hot = [r for r in st.session_state.lead_runs if r["expected"].lower() != "hot"]
+    false_hot = [r for r in non_hot if r["predicted"].lower() == "hot"]
+    false_hot_rate = (len(false_hot) / len(non_hot) * 100) if non_hot else 0
+
+    # --- Safety
     if st.session_state.safety_runs:
-        safety_score = sum(r["pass"] for r in st.session_state.safety_runs)/len(st.session_state.safety_runs)*100
+        safety_score = (
+            sum(r["pass"] for r in st.session_state.safety_runs)
+            / len(st.session_state.safety_runs)
+            * 100
+        )
     else:
         safety_score = 0
 
+    # --- Reliability
     rel = reliability(accuracy_score, completeness_score, safety_score)
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Accuracy", f"{accuracy_score:.1f}")
-    c2.metric("Completeness", f"{completeness_score:.1f}")
-    c3.metric("Safety", f"{safety_score:.1f}")
-    c4.metric("Reliability Baseline", f"{rel:.1f}")
+    # Big CEO-style numbers
+    st.subheader("Executive Summary")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Reliability", f"{rel:.1f}")
+    c2.metric("Accuracy", f"{accuracy_score:.1f}%")
+    c3.metric("Completeness", f"{completeness_score:.1f}%")
+    c4.metric("False-Hot Rate", f"{false_hot_rate:.1f}%")
+    c5.metric("Safety", f"{safety_score:.1f}%")
+
+    # GO / FIX / NO-GO badge
+    label = gate_label(rel, accuracy_score, completeness_score, false_hot_rate, safety_score)
+    if label == "GO":
+        st.success("GO ✅ Pilot reliable")
+    elif label == "FIX":
+        st.warning("FIX ⚠️ Some issues to correct")
+    else:
+        st.error("NO-GO ❌ Not safe/reliable enough")
+
 
 st.header("4) Generate 1-Page Pilot Report")
 
