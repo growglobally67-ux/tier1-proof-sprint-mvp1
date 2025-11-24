@@ -1,0 +1,7 @@
+{
+  "name": "Tier1 Streamlit MVP",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postCreateCommand": "pip install -r requirements.txt",
+  "forwardPorts": [8501],
+  "postAttachCommand": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
+}
