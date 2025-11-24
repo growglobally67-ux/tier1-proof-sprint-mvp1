@@ -203,21 +203,65 @@ if "lead_runs" not in st.session_state:
     st.session_state.lead_runs = []
 if "safety_runs" not in st.session_state:
     st.session_state.safety_runs = []
+# -----------------------------
+# NEW: Multi-turn Pilot UI
+# -----------------------------
+st.header("1) Run Lead Pilot (Multi-turn Journey)")
 
-st.header("1) Run Lead Pilot")
-
+# 1) Pick scenario (same as before)
 scenario_names = [s[0] for s in SCENARIOS]
 pick = st.selectbox("Pick a dummy scenario", scenario_names)
-scenario_text = [s[1] for s in SCENARIOS if s[0]==pick][0]
-expected_tag = [s[2] for s in SCENARIOS if s[0]==pick][0]
+scenario_text = [s[1] for s in SCENARIOS if s[0] == pick][0]
+expected_tag = [s[2] for s in SCENARIOS if s[0] == pick][0]
 
-custom_input = st.text_area("Or paste a real lead here (optional)", value=scenario_text, height=120)
+# 2) Session state for chat
+if "pilot_messages" not in st.session_state:
+    st.session_state.pilot_messages = []
+if "pilot_done" not in st.session_state:
+    st.session_state.pilot_done = False
+if "pilot_json" not in st.session_state:
+    st.session_state.pilot_json = None
 
-if st.button("Run Pilot Agent"):
-    js = call_llm(custom_input, use_fake=use_fake)
-    predicted_tag = js.get("lead_tag","")
+# 3) Start pilot button
+if st.button("Start Pilot"):
+    st.session_state.pilot_messages = [{"role": "user", "content": scenario_text}]
+    st.session_state.pilot_done = False
+    st.session_state.pilot_json = None
+
+    assistant_text = call_llm_turn(st.session_state.pilot_messages, use_fake=use_fake)
+    st.session_state.pilot_messages.append({"role": "assistant", "content": assistant_text})
+
+# 4) Show chat so far
+for msg in st.session_state.pilot_messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+# NOTE: st.chat_input must be outside columns/tabs/expanders. :contentReference[oaicite:1]{index=1}
+# 5) Continue conversation
+if st.session_state.pilot_messages and not st.session_state.pilot_done:
+    user_reply = st.chat_input("Your reply here...")
+    if user_reply:
+        st.session_state.pilot_messages.append({"role": "user", "content": user_reply})
+
+        assistant_text = call_llm_turn(st.session_state.pilot_messages, use_fake=use_fake)
+        st.session_state.pilot_messages.append({"role": "assistant", "content": assistant_text})
+
+        # Check if JSON appeared
+        js = extract_json_if_any(assistant_text)
+        if js:
+            st.session_state.pilot_done = True
+            st.session_state.pilot_json = js
+
+# 6) When done, score + log
+if st.session_state.pilot_done and st.session_state.pilot_json:
+    js = st.session_state.pilot_json
+
+    predicted_tag = js.get("lead_tag", "")
     tag_correct = score_tag(expected_tag, predicted_tag)
     fields_collected, comp_pct = completeness(js)
+
+    st.subheader("Pilot Output JSON (Final)")
+    st.json(js)
 
     st.session_state.lead_runs.append({
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -227,16 +271,12 @@ if st.button("Run Pilot Agent"):
         "tag_correct": tag_correct,
         "fields_required": len(REQUIRED_FIELDS),
         "fields_collected": fields_collected,
-        "completeness_pct": round(comp_pct,1),
-        "notes": js.get("tag_reasoning","")
+        "completeness_pct": round(comp_pct, 1),
+        "notes": js.get("tag_reasoning", "")
     })
 
-    st.subheader("Pilot Output JSON")
-    st.json(js)
+    st.success("Pilot finished and logged ✅")
 
-if st.session_state.lead_runs:
-    st.subheader("Measurement Log (Auto-filled)")
-    st.dataframe(st.session_state.lead_runs, use_container_width=True)
 
 st.header("2) Run Safety Suite")
 
