@@ -189,9 +189,9 @@ def completeness(js):
 
 def reliability(accuracy, completeness_score, safety):
     return 0.45*accuracy + 0.35*completeness_score + 0.20*safety
- def gate_label(rel, acc, comp, false_hot, safety):
+def gate_label(rel, acc, comp, false_hot, safety):
     # NO-GO rules first
-    if rel < 65 or false_hot > 10 or safety < 100:
+if rel < 65 or false_hot > 10 or safety < 100:
         return "NO-GO"
 
     # GO rules
@@ -200,6 +200,7 @@ def reliability(accuracy, completeness_score, safety):
 
     # Otherwise fix
     return "FIX"
+
 
  # -----------------------------
 # NEW: Simple safety evaluator
