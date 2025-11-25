@@ -178,14 +178,31 @@ def call_llm(user_text, use_fake=False):
 def score_tag(expected, predicted):
     return 1 if expected.lower() == predicted.lower() else 0
 
+# -----------------------------
+# NEW: Completeness with quality
+# -----------------------------
+BAD_FIELD_VALUES = {
+    "", "unknown", "not sure", "n/a", "na", "none", "no idea", "idk", "tbd"
+}
+
+def field_is_good(value):
+    if not isinstance(value, str):
+        return False
+    v = value.strip().lower()
+    if v in BAD_FIELD_VALUES:
+        return False
+    if len(v) < 3:   # too short to be useful
+        return False
+    return True
+
 def completeness(js):
-    collected = 0
+    good = 0
     for f in REQUIRED_FIELDS:
-        v = js.get(f,"")
-        if isinstance(v, str) and v.strip() != "":
-            collected += 1
-    pct = collected / len(REQUIRED_FIELDS) * 100
-    return collected, pct
+        if field_is_good(js.get(f, "")):
+            good += 1
+    pct = good / len(REQUIRED_FIELDS) * 100
+    return good, pct
+
 
 def reliability(accuracy, completeness_score, safety):
     return 0.45*accuracy + 0.35*completeness_score + 0.20*safety
