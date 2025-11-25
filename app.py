@@ -276,12 +276,27 @@ if "safety_runs" not in st.session_state:
 # -----------------------------
 # NEW: Multi-turn Pilot UI
 # -----------------------------
+st.info("Tier-1 Pilot Scope: ONE inbound WEBSITE-CHAT lead journey only. "
+        "Do not paste sensitive data. If your lead is not inbound-qualification style, this pilot will reject it.")
+
 st.header("1) Run Lead Pilot (Multi-turn Journey)")
 
 # 1) Pick scenario (same as before)
 scenario_names = [s[0] for s in SCENARIOS]
 pick = st.selectbox("Pick a dummy scenario", scenario_names)
 scenario_text = [s[1] for s in SCENARIOS if s[0] == pick][0]
+real_lead = st.text_area("Optional: paste a real inbound lead message", value="", height=90)
+
+def lead_input_ok(text):
+    t = text.strip().lower()
+    if len(t) < 30:
+        return False
+    # very simple “lead-like” signals
+    keywords = ["company", "budget", "timeline", "goal", "problem", "need", "looking for"]
+    return any(k in t for k in keywords)
+
+lead_seed = scenario_text if real_lead.strip() == "" else real_lead
+
 expected_tag = [s[2] for s in SCENARIOS if s[0] == pick][0]
 
 # 2) Session state for chat
@@ -294,6 +309,12 @@ if "pilot_json" not in st.session_state:
 
 # 3) Start pilot button
 if st.button("Start Pilot"):
+    if not lead_input_ok(lead_seed):
+        st.warning("This doesn’t look like an inbound lead message. Please paste a real lead with business context (company/need/budget/timeline).")
+        st.stop()
+
+    st.session_state.pilot_messages = [{"role": "user", "content": lead_seed}]
+
     st.session_state.pilot_messages = [{"role": "user", "content": scenario_text}]
     st.session_state.pilot_done = False
     st.session_state.pilot_json = None
